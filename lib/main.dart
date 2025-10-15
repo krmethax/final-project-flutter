@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'home_page.dart';
 import 'product_list_page.dart';
 import 'product_edit_page.dart';
+import 'product_detail_page.dart';
 
 void main() {
   runApp(const MyApp());
@@ -20,6 +21,7 @@ class MyApp extends StatelessWidget {
       getPages: [
         GetPage(name: '/', page: () => const HomePage()),
         GetPage(name: '/products', page: () => const ProductListPage()),
+        GetPage(name: '/product/:title', page: () => const ProductDetailPage()),
         GetPage(name: '/product/edit', page: () => const ProductEditPageWrapper()),
       ],
     );

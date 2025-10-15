@@ -39,7 +39,17 @@ class _ProductListPageState extends State<ProductListPage> {
 
   Future<void> deleteProduct(String id) async {
     final url = 'http://127.0.0.1:8090/api/collections/products/records/$id';
-    final res = await http.delete(Uri.parse(url));
+
+    // ใส่ token ที่ได้จากตอน login หรือ admin login
+    const token = 'YOUR_ADMIN_OR_USER_TOKEN';
+
+    final res = await http.delete(
+      Uri.parse(url),
+      headers: {
+        'Authorization': 'Bearer $token',
+      },
+    );
+
     if (res.statusCode == 204) {
       setState(() {
         products.removeWhere((p) => p['id'] == id);
@@ -49,7 +59,7 @@ class _ProductListPageState extends State<ProductListPage> {
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ไม่สามารถลบสินค้าได้')),
+        SnackBar(content: Text('ลบไม่สำเร็จ (${res.statusCode})')),
       );
     }
   }

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:get/get.dart';
+import 'package:pocketbase/pocketbase.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -11,13 +12,38 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Map<String, List<dynamic>> groupedProducts = {};
   bool isLoading = true;
+  late PocketBase pb;
+  UnsubscribeFunc? unsubscribe;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    pb = PocketBase('http://127.0.0.1:8090');
+    fetchProducts();
+    subscribeRealtime();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    unsubscribe?.call();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      fetchProducts();
+    }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
     fetchProducts();
   }
 
@@ -30,9 +56,7 @@ class _HomePageState extends State<HomePage> {
       final Map<String, List<dynamic>> grouped = {};
       for (final p in items) {
         final category = p['category'] ?? 'Other';
-        if (!grouped.containsKey(category)) {
-          grouped[category] = [];
-        }
+        grouped.putIfAbsent(category, () => []);
         grouped[category]!.add(p);
       }
       setState(() {
@@ -42,6 +66,17 @@ class _HomePageState extends State<HomePage> {
     } else {
       setState(() => isLoading = false);
     }
+  }
+
+  Future<void> subscribeRealtime() async {
+    unsubscribe = await pb.realtime.subscribe('collections.products.records', (e) {
+      fetchProducts();
+    });
+  }
+
+  String _slugify(String text) {
+    return text.toLowerCase().replaceAll(RegExp(r'[^a-zA-Z0-9ก-๙\s-]'), '')
+        .replaceAll(' ', '-');
   }
 
   @override
@@ -113,52 +148,57 @@ class _HomePageState extends State<HomePage> {
                   itemCount: products.length,
                   itemBuilder: (context, index) {
                     final p = products[index];
-                    return Card(
-                      elevation: 0,
-                      color: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                        side: const BorderSide(color: Colors.black12),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          AspectRatio(
-                            aspectRatio: 1,
-                            child: ClipRRect(
-                              borderRadius: const BorderRadius.vertical(
-                                top: Radius.circular(16),
-                              ),
-                              child: Image.network(
-                                p['image'],
-                                width: double.infinity,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.all(8.0),
-                            child: Text(
-                              p['title'],
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: GoogleFonts.prompt(
-                                fontWeight: FontWeight.bold,
+                    final slug = _slugify(p['title']);
+                    return GestureDetector(
+                      onTap: () {
+                        Get.toNamed('/product/$slug', arguments: p);
+                      },
+                      child: Card(
+                        elevation: 0,
+                        color: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                          side: const BorderSide(color: Colors.black12),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            AspectRatio(
+                              aspectRatio: 1,
+                              child: ClipRRect(
+                                borderRadius: const BorderRadius.vertical(
+                                  top: Radius.circular(16),
+                                ),
+                                child: Image.network(
+                                  p['image'],
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                ),
                               ),
                             ),
-                          ),
-                          Padding(
-                            padding:
-                            const EdgeInsets.symmetric(horizontal: 8),
-                            child: Text(
-                              '฿${p['price']}',
-                              style: GoogleFonts.prompt(
-                                fontWeight: FontWeight.w500,
-                                color: Colors.black,
+                            Padding(
+                              padding: const EdgeInsets.all(8.0),
+                              child: Text(
+                                p['title'],
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: GoogleFonts.prompt(
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
-                          ),
-                        ],
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              child: Text(
+                                '฿${p['price']}',
+                                style: GoogleFonts.prompt(
+                                  fontWeight: FontWeight.w500,
+                                  color: Colors.black,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   },
