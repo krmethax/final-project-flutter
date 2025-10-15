@@ -17,6 +17,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   bool isLoading = true;
   late PocketBase pb;
   UnsubscribeFunc? unsubscribe;
+  String searchQuery = '';
 
   @override
   void initState() {
@@ -32,19 +33,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     unsubscribe?.call();
     super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) {
-      fetchProducts();
-    }
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    fetchProducts();
   }
 
   Future<void> fetchProducts() async {
@@ -74,140 +62,202 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     });
   }
 
-  String _slugify(String text) {
-    return text.toLowerCase().replaceAll(RegExp(r'[^a-zA-Z0-9ก-๙\s-]'), '')
-        .replaceAll(' ', '-');
-  }
-
   @override
   Widget build(BuildContext context) {
     final width = MediaQuery.of(context).size.width;
     final isMobile = width < 600;
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
+        elevation: 0,
+        backgroundColor: Colors.transparent,
+        centerTitle: true,
         title: Text(
           'iTShop',
           style: GoogleFonts.prompt(
-            color: Colors.black,
+            fontSize: 24,
             fontWeight: FontWeight.bold,
+            color: Colors.black87,
           ),
         ),
-        backgroundColor: Colors.white.withOpacity(0.8),
-        foregroundColor: Colors.black,
-        elevation: 0,
-        centerTitle: true,
-        actions: [
-          TextButton(
-            onPressed: () {
-              Get.toNamed('/products');
-            },
-            child: Text(
-              'All Products',
-              style: GoogleFonts.prompt(
-                color: Colors.black,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-        ],
       ),
       body: isLoading
-          ? const Center(child: CircularProgressIndicator(color: Colors.black))
-          : SingleChildScrollView(
-        padding: EdgeInsets.symmetric(
-          horizontal: isMobile ? 16 : width * 0.1,
-          vertical: 20,
+          ? const Center(child: CircularProgressIndicator())
+          : RefreshIndicator(
+        onRefresh: fetchProducts,
+        child: ListView(
+          children: [
+            _buildHeroSection(),
+            _buildSearchBar(),
+            ...groupedProducts.entries.map((entry) {
+              final category = entry.key;
+              final products = entry.value
+                  .where((p) => p['title']
+                  ?.toString()
+                  .toLowerCase()
+                  .contains(searchQuery.toLowerCase()) ??
+                  false)
+                  .toList();
+              if (products.isEmpty) return const SizedBox();
+              return _buildCategorySection(category, products, isMobile);
+            }),
+          ],
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: groupedProducts.entries.map((entry) {
-            final category = entry.key;
-            final products = entry.value;
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  category.toUpperCase(),
-                  style: GoogleFonts.prompt(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
+      ),
+      bottomNavigationBar: BottomNavigationBar(
+        selectedItemColor: Colors.black,
+        unselectedItemColor: Colors.grey,
+        showSelectedLabels: true,
+        currentIndex: 0,
+        onTap: (index) {
+          if (index == 1) Get.toNamed('/products');
+        },
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'หน้าแรก'),
+          BottomNavigationBarItem(icon: Icon(Icons.list_alt), label: 'ทั้งหมด'),
+        ],
+      ),
+    );
+  }
+
+  /// ✅ Banner เหลือแค่สีพื้นหลัง + ข้อความ
+  Widget _buildHeroSection() {
+    return Container(
+      margin: const EdgeInsets.all(16),
+      height: 160,
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF4A90E2), Color(0xFF007AFF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        'ยินดีต้อนรับสู่ iTShop',
+        style: GoogleFonts.prompt(
+          color: Colors.white,
+          fontSize: 22,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchBar() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: TextField(
+        decoration: InputDecoration(
+          hintText: 'ค้นหาสินค้า...',
+          prefixIcon: const Icon(Icons.search),
+          border: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(30),
+            borderSide: BorderSide.none,
+          ),
+          filled: true,
+          fillColor: Colors.white,
+        ),
+        onChanged: (val) => setState(() => searchQuery = val),
+      ),
+    );
+  }
+
+  Widget _buildCategorySection(String category, List<dynamic> products, bool isMobile) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            category,
+            style: GoogleFonts.prompt(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 10),
+          GridView.builder(
+            physics: const NeverScrollableScrollPhysics(),
+            shrinkWrap: true,
+            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: isMobile ? 2 : 4,
+              crossAxisSpacing: 10,
+              mainAxisSpacing: 10,
+              childAspectRatio: 0.65,
+            ),
+            itemCount: products.length,
+            itemBuilder: (context, index) {
+              final p = products[index];
+              final imageUrl = p['image'] ?? 'https://via.placeholder.com/300x300?text=No+Image';
+              final title = p['title'] ?? 'ไม่มีชื่อสินค้า';
+              final price = p['price']?.toString() ?? '0';
+
+              return GestureDetector(
+                onTap: () => Get.toNamed('/product/${p['id']}', arguments: p),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 5,
+                        offset: const Offset(0, 2),
+                      )
+                    ],
                   ),
-                ),
-                const SizedBox(height: 10),
-                GridView.builder(
-                  physics: const NeverScrollableScrollPhysics(),
-                  shrinkWrap: true,
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: isMobile ? 2 : 4,
-                    crossAxisSpacing: 16,
-                    mainAxisSpacing: 16,
-                    childAspectRatio: 0.6,
-                  ),
-                  itemCount: products.length,
-                  itemBuilder: (context, index) {
-                    final p = products[index];
-                    final slug = _slugify(p['title']);
-                    return GestureDetector(
-                      onTap: () {
-                        Get.toNamed('/product/$slug', arguments: p);
-                      },
-                      child: Card(
-                        elevation: 0,
-                        color: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          side: const BorderSide(color: Colors.black12),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            AspectRatio(
-                              aspectRatio: 1,
-                              child: ClipRRect(
-                                borderRadius: const BorderRadius.vertical(
-                                  top: Radius.circular(16),
-                                ),
-                                child: Image.network(
-                                  p['image'],
-                                  width: double.infinity,
-                                  fit: BoxFit.cover,
-                                ),
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.all(8.0),
-                              child: Text(
-                                p['title'],
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: GoogleFonts.prompt(
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
-                              child: Text(
-                                '฿${p['price']}',
-                                style: GoogleFonts.prompt(
-                                  fontWeight: FontWeight.w500,
-                                  color: Colors.black,
-                                ),
-                              ),
-                            ),
-                          ],
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ClipRRect(
+                        borderRadius:
+                        const BorderRadius.vertical(top: Radius.circular(16)),
+                        child: Image.network(
+                          imageUrl,
+                          height: 120,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              height: 120,
+                              color: Colors.grey[300],
+                              child: const Icon(Icons.image_not_supported),
+                            );
+                          },
                         ),
                       ),
-                    );
-                  },
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Text(
+                          title,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.prompt(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        child: Text(
+                          '฿$price',
+                          style: GoogleFonts.prompt(
+                            color: Colors.redAccent,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                  ),
                 ),
-                const SizedBox(height: 30),
-              ],
-            );
-          }).toList(),
-        ),
+              );
+            },
+          ),
+        ],
       ),
     );
   }
