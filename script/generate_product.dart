@@ -1,32 +1,33 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:pocketbase/pocketbase.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 Future<void> main() async {
-  final pb = PocketBase('http://127.0.0.1:8090');
+  await dotenv.load(fileName: ".env");
 
-  // ✅ login ด้วย admin ก่อน
+  final pb = PocketBase(dotenv.env['POCKETBASE_URL']!);
+  final email = dotenv.env['POCKETBASE_ADMIN_EMAIL']!;
+  final password = dotenv.env['POCKETBASE_ADMIN_PASSWORD']!;
+  final apiUrl = dotenv.env['FAKESTORE_API']!;
+
   try {
-    await pb.admins.authWithPassword(
-      'methasit.ka.65@ubu.ac.th', // ← เปลี่ยนเป็นของคุณ
-      'Methasit66-99',           // ← เปลี่ยนเป็นของคุณ
-    );
-    print('✅ Connected to PocketBase as admin');
+    await pb.admins.authWithPassword(email, password);
+    print('Connected to PocketBase as admin');
   } catch (e) {
-    print('❌ Failed to authenticate admin: $e');
+    print('Failed to authenticate admin: $e');
     return;
   }
 
-  final res = await http.get(Uri.parse('https://fakestoreapi.com/products'));
+  final res = await http.get(Uri.parse(apiUrl));
   if (res.statusCode != 200) {
-    print('❌ Failed to fetch products');
+    print('Failed to fetch products');
     return;
   }
 
   final List<dynamic> products = jsonDecode(res.body);
   print('Fetched ${products.length} products from FakeStoreAPI');
 
-  // ✅ บันทึกลง PocketBase ทีละตัว
   for (final p in products) {
     try {
       final record = await pb.collection('products').create(body: {
@@ -36,12 +37,11 @@ Future<void> main() async {
         'category': p['category'],
         'image': p['image'],
       });
-
       print('Created: ${record.id} - ${p['title']}');
     } catch (e) {
       print('Error creating product ${p['title']}: $e');
     }
   }
 
-  print('🎉 Finished seeding products into PocketBase');
+  print('Finished seeding products into PocketBase');
 }
